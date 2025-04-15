@@ -1,3 +1,15 @@
+# api/db/session.py
+
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
+
+DATABASE_URL = "postgresql+asyncpg://user:pass@db:5432/xtremdb"
+
+engine = create_async_engine(DATABASE_URL, echo=True)
+SessionLocal = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+
+async def connect_to_db():
+    print("💾 DB connected (fake connect)")
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

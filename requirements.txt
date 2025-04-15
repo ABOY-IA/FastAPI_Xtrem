@@ -3,7 +3,7 @@ altair==5.5.0
 annotated-types==0.7.0
 anyio==4.9.0
 attrs==25.3.0
-bcrypt==4.3.0
+bcrypt==3.2.0
 blinker==1.9.0
 cachetools==5.5.2
 certifi==2025.1.31
@@ -12,7 +12,9 @@ charset-normalizer==3.4.1
 click==8.1.8
 cryptography==44.0.2
 Deprecated==1.2.18
+dnspython==2.7.0
 ecdsa==0.19.1
+email_validator==2.2.0
 fastapi==0.115.12
 gitdb==4.0.12
 GitPython==3.1.44

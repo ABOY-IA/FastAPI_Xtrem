@@ -16,7 +16,7 @@ Ce projet utilise un environnement virtuel Python pour isoler les dépendances.
 
 ```bash
 # À la racine du projet
-python -m venv .venv
+python3 -m venv .venv
 ```
 
 ## ▶️ Activation de l’environnement

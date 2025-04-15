@@ -11,8 +11,7 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     role = Column(String, default="user", nullable=False)
-    # Champ optionnel pour le refresh token persistant (si besoin de persistance côté serveur)
     refresh_token = Column(String, nullable=True)
+    bio = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-

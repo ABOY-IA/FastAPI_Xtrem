@@ -3,6 +3,15 @@ from getpass import getpass
 from api.db.session import SessionLocal
 from api.db.services import create_user
 from loguru import logger
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Récupère la clé secrète
+ADMIN_CREATION_SECRET = os.getenv("ADMIN_CREATION_SECRET")
+
+# Récupère l'URL de la base
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 def main():
     # Récupère la clé secrète pour la création d'un admin depuis les variables d'environnement

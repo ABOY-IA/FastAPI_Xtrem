@@ -1,21 +1,26 @@
 services:
   api:
     build:
-      context: .
+      context: ./api
       dockerfile: Dockerfile
     command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
-      - .:/app
+      - ./api:/app/api
     ports:
       - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
 
-  streamlit:
+  frontend:
     build:
-      context: .
+      context: ./frontend
       dockerfile: Dockerfile
-    command: streamlit run frontend/app.py
+    command: streamlit run app.py --server.enableCORS true
     volumes:
-      - .:/app
+      - ./frontend:/app
     ports:
       - "8501:8501"
     depends_on:
@@ -24,14 +29,19 @@ services:
   db:
     image: postgres:15
     restart: always
-    volumes:
-      - postgres_data:/var/lib/postgresql/data/
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: pass
       POSTGRES_DB: xtremdb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
     ports:
-      - "5433:5432"  # Changer le port exposé local à 5433
+      - "5433:5432"  # Port local 5433 redirige vers le port 5432 du conteneur
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
 volumes:
   postgres_data:

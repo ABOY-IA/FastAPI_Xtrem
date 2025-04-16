@@ -5,14 +5,11 @@ from loguru import logger
 from api.db.session import SessionLocal
 from api.db.schemas import UserCreate, UserOut, UserLogin
 from api.db.services import create_user, authenticate_user, get_password_hash
-from api.db.models import User
+from api.db.models import User, UserSensitiveData
+from api.core import crypto
 from api.core.tokens import create_access_token
 import os
 from datetime import timedelta
-
-# Configuration de Loguru pour enregistrer tous les logs dans "logs/api.log"
-# Rotation quotidienne à 17h15, sans limite de taille, rétention illimitée, et niveau INFO.
-logger.add("logs/api.log", rotation="17:15", retention=None, level="INFO", enqueue=True)
 
 router = APIRouter()
 
@@ -37,7 +34,8 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
     """
     Endpoint d'inscription d'un nouvel utilisateur.
     Vérifie que le username et l'email n'existent pas déjà,
-    crée l'utilisateur et enregistre l'activité dans les logs.
+    crée l'utilisateur, génère une clé unique de chiffrement,
+    chiffre la bio et stocke celle-ci dans la table dédiée.
     """
     if db.query(User).filter(or_(User.username == user.username, User.email == user.email)).first():
         logger.warning(f"Registration failed: username '{user.username}' or email '{user.email}' already exists.")
@@ -45,9 +43,35 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username or email already registered"
         )
+    # Création de l'utilisateur via le service existant (mot de passe à hasher en production)
     new_user = create_user(db, user.username, user.email, user.password)
+    
+    # Génération de la clé de chiffrement unique pour l'utilisateur
+    encryption_key = crypto.generate_user_key()
+    new_user.encryption_key = encryption_key
+
+    # IMPORTANT : pour garantir que la donnée sensible ne reste pas en clair dans la table users,
+    # on vide le champ bio dans l'enregistrement principal.
+    new_user.bio = None
+    db.commit()
+    db.refresh(new_user)
+
+    # Chiffrement de la bio et création de l'enregistrement dans la table user_sensitive_data
+    encrypted_bio = crypto.encrypt_sensitive_data(user.bio, encryption_key)
+    sensitive_data = UserSensitiveData(user_id=new_user.id, encrypted_bio=encrypted_bio)
+    db.add(sensitive_data)
+    db.commit()
     logger.info(f"User registered successfully: username='{new_user.username}', id={new_user.id}")
-    return new_user
+    
+    # Construction de la réponse : on renvoie la bio en clair (comme donnée initiale)
+    response = {
+        "id": new_user.id,
+        "username": new_user.username,
+        "email": new_user.email,
+        "bio": user.bio,  # La bio en clair, pour la réponse uniquement
+        "role": new_user.role
+    }
+    return response
 
 @router.post("/login", tags=["Users"])
 def login(user: UserLogin, db: Session = Depends(get_db)):
@@ -55,7 +79,7 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     Endpoint de connexion d'un utilisateur.
     Vérifie les identifiants et génère deux tokens JWT :
       - Un access token à durée courte pour authentifier les requêtes.
-      - Un refresh token à durée plus longue pour renouveler l'access token.
+      - Un refresh token à durée plus longue pour renouveler l'access token, ici chiffré et stocké dans la table sensitive.
     Les scopes sont définis en fonction du rôle de l'utilisateur :
       - Admin : ["admin", "read:profile", "write:profile"]
       - Utilisateur classique : ["read:profile"]
@@ -69,11 +93,8 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
             detail="Invalid credentials"
         )
     
-    # Définir les scopes en fonction du rôle de l'utilisateur
-    if db_user.role == "admin":
-        scopes = ["admin", "read:profile", "write:profile"]
-    else:
-        scopes = ["read:profile"]
+    # Définir les scopes en fonction du rôle
+    scopes = ["admin", "read:profile", "write:profile"] if db_user.role == "admin" else ["read:profile"]
 
     # Génération du token d'accès (durée courte)
     access_token_expires = timedelta(minutes=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30)))
@@ -89,28 +110,58 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
         expires_delta=refresh_token_expires
     )
 
-    # Stocker le refresh token dans la base de données pour l'utilisateur
-    db_user.refresh_token = refresh_token
+    # Chiffrer le refresh token avec la clé de l'utilisateur
+    encrypted_refresh_token = crypto.encrypt_sensitive_data(refresh_token, db_user.encryption_key)
+    
+    # Stocker le refresh token chiffré dans la table sensitive
+    if db_user.sensitive_data:
+        db_user.sensitive_data.encrypted_refresh_token = encrypted_refresh_token
+    else:
+        # Si l'enregistrement n'existe pas encore (ce qui est rare si la création est faite à l'inscription)
+        from api.db.models import UserSensitiveData
+        sensitive_data = UserSensitiveData(
+            user_id=db_user.id,
+            encrypted_bio="",
+            encrypted_refresh_token=encrypted_refresh_token
+        )
+        db.add(sensitive_data)
+    
+    db_user.refresh_token = None # On ne stocke pas le refresh token en clair dans la table users
     db.commit()
 
-    logger.info(f"User logged in successfully: username='{db_user.username}', id={db_user.id}. "
-                f"Access token and refresh token generated with scopes: {scopes}")
-    
+    logger.info(f"User logged in successfully: username='{db_user.username}', id={db_user.id}. Scopes: {scopes}")
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer"
     }
 
+
 @router.post("/logout", tags=["Users"])
 def logout():
     """
     Endpoint de déconnexion d'un utilisateur.
-    Pour une API REST stateless, la déconnexion se gère côté client.
-    On enregistre néanmoins l'événement dans les logs.
+    La déconnexion se gère côté client, on enregistre simplement l'action dans les logs.
     """
     logger.info("User logout requested")
     return {"message": "Logout successful (client should remove tokens)."}
+
+@router.get("/profile", response_model=UserOut, tags=["Users"])
+def get_profile(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Endpoint pour récupérer le profil de l'utilisateur connecté.
+    La bio est déchiffrée à l'aide de la clé de chiffrement de l'utilisateur.
+    """
+    # Si l'utilisateur dispose d'une donnée sensible enregistrée, déchiffrez la bio
+    if current_user.sensitive_data:
+        decrypted_bio = crypto.decrypt_sensitive_data(current_user.sensitive_data.encrypted_bio, current_user.encryption_key)
+        current_user.bio = decrypted_bio
+    else:
+        current_user.bio = None
+    return current_user
 
 @router.patch("/profile", response_model=UserOut, tags=["Users"])
 def update_profile(
@@ -121,7 +172,7 @@ def update_profile(
     """
     Endpoint de mise à jour partielle du profil de l'utilisateur connecté.
     Permet de modifier l'email, le mot de passe et la bio.
-    Enregistre dans les logs l'action et renvoie l'utilisateur mis à jour.
+    Pour la bio, la nouvelle valeur est chiffrée et stockée dans la table dédiée.
     """
     updated = False
     # Mise à jour de l'email si fourni
@@ -132,14 +183,30 @@ def update_profile(
     if "password" in update_data and update_data["password"]:
         current_user.hashed_password = get_password_hash(update_data["password"])
         updated = True
-    # Mise à jour de la bio si fourni (assurez-vous que votre modèle User comporte un champ 'bio')
+    # Mise à jour de la bio si fournie
     if "bio" in update_data and update_data["bio"]:
-        current_user.bio = update_data["bio"]
+        # Mettre à jour ou créer l'enregistrement de la donnée sensible
+        if current_user.sensitive_data:
+            current_user.sensitive_data.encrypted_bio = crypto.encrypt_sensitive_data(update_data["bio"], current_user.encryption_key)
+        else:
+            from api.db.models import UserSensitiveData  # Au cas où il n'y avait pas de bio renseignée
+            sensitive_data = UserSensitiveData(user_id=current_user.id, encrypted_bio=crypto.encrypt_sensitive_data(update_data["bio"], current_user.encryption_key))
+            db.add(sensitive_data)
         updated = True
+
     if not updated:
         logger.info(f"No update data provided for user '{current_user.username}'.")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No update data provided.")
+
     db.commit()
     db.refresh(current_user)
+    
+    # Pour la réponse, on déchiffre la bio depuis la table dédiée
+    if current_user.sensitive_data:
+        decrypted_bio = crypto.decrypt_sensitive_data(current_user.sensitive_data.encrypted_bio, current_user.encryption_key)
+        current_user.bio = decrypted_bio
+    else:
+        current_user.bio = None
+
     logger.info(f"User profile updated successfully: username='{current_user.username}', id={current_user.id}")
     return current_user

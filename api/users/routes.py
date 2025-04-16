@@ -6,6 +6,8 @@ from api.db.session import SessionLocal
 from api.db.schemas import UserCreate, UserOut, UserLogin
 from api.db.services import create_user, authenticate_user, get_password_hash
 from api.db.models import User
+from api.core.security import create_access_token  # chemin à adapter selon ton projet
+from datetime import timedelta
 
 # Configuration de Loguru pour enregistrer tous les logs dans "logs/api.log"
 # Rotation quotidienne à 17h15, sans limite de taille, rétention illimitée, et niveau INFO.
@@ -50,11 +52,7 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
 def login(user: UserLogin, db: Session = Depends(get_db)):
     """
     Endpoint de connexion d'un utilisateur.
-    Vérifie les identifiants et enregistre dans les logs la tentative de connexion,
-    qu'elle soit échouée ou réussie.
-    
-    Retourne également le rôle de l'utilisateur, afin que le frontend puisse
-    le stocker et adapter l'affichage (par exemple pour l'accès à la page administration).
+    Vérifie les identifiants, génère un token JWT si ok, et renvoie le rôle.
     """
     db_user = authenticate_user(db, user.username, user.password)
     if not db_user:
@@ -63,8 +61,20 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials"
         )
+
+    access_token_expires = timedelta(minutes=30)  # tu peux le config dans ton settings
+    access_token = create_access_token(
+        data={"sub": db_user.username, "role": db_user.role},  # ce que tu veux mettre dans le token
+        expires_delta=access_token_expires
+    )
+
     logger.info(f"User logged in successfully: username='{db_user.username}', id={db_user.id}")
-    return {"message": f"Welcome {db_user.username}!", "role": db_user.role}
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "role": db_user.role,
+        "username": db_user.username
+    }
 
 @router.post("/logout", tags=["Users"])
 def logout():

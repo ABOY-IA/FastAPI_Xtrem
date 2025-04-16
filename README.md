@@ -114,7 +114,7 @@ FastAPI_Xtrem/
 ├── requirements.txt             # Dépendances Python
 ├── README.md                    # Documentation complète
 ├── create_admin.py              # Fichier de création compte administrateur
-├── Dockerfile                   # Image FastAPI
+├── Dockerfile.api                   # Image FastAPI
 ├── docker-compose.yml           # Services API, frontend, Prometheus, Grafana
 ├── docker-compose.override.yml  # Pour le dev local (montage auto)
 ├── .gitignore

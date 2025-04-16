@@ -8,12 +8,14 @@ services:
       - .:/app
     ports:
       - "8000:8000"
+    depends_on:
+      - db
 
   streamlit:
     build:
       context: .
       dockerfile: Dockerfile
-    command: streamlit run frontend/app.py
+    command: streamlit run frontend/app.py --server.port 8501
     volumes:
       - .:/app
     ports:
@@ -24,14 +26,14 @@ services:
   db:
     image: postgres:15
     restart: always
-    volumes:
-      - postgres_data:/var/lib/postgresql/data/
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: pass
       POSTGRES_DB: xtremdb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5433:5432"  # Changer le port exposé local à 5433
+      - "5433:5432"
 
 volumes:
   postgres_data:

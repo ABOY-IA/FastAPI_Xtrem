@@ -3,6 +3,7 @@ import uvicorn
 from api.events import register_startup_events, connect_to_db, disconnect_from_db
 from api.users.routes import router as users_router
 from api.admin.routes import router as admin_router
+from api.auth.routes import router as auth_router
 
 # Création de l'application FastAPI avec ses métadonnées
 app = FastAPI(
@@ -17,6 +18,7 @@ register_startup_events(app)
 # Ajout des gestionnaires d'événements pour la connexion et la déconnexion (logs)
 app.add_event_handler("startup", connect_to_db)
 app.add_event_handler("shutdown", disconnect_from_db)
+app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 
 # Endpoint racine pour vérifier le bon fonctionnement de l'API
 @app.get("/", tags=["Root"])

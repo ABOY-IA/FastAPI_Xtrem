@@ -6,6 +6,9 @@ from api.db.session import SessionLocal
 from api.db.schemas import UserCreate, UserOut, UserLogin
 from api.db.services import create_user, authenticate_user, get_password_hash
 from api.db.models import User
+from api.core.tokens import create_access_token
+import os
+from datetime import timedelta
 
 # Configuration de Loguru pour enregistrer tous les logs dans "logs/api.log"
 # Rotation quotidienne à 17h15, sans limite de taille, rétention illimitée, et niveau INFO.
@@ -50,11 +53,13 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
 def login(user: UserLogin, db: Session = Depends(get_db)):
     """
     Endpoint de connexion d'un utilisateur.
-    Vérifie les identifiants et enregistre dans les logs la tentative de connexion,
-    qu'elle soit échouée ou réussie.
-    
-    Retourne également le rôle de l'utilisateur, afin que le frontend puisse
-    le stocker et adapter l'affichage (par exemple pour l'accès à la page administration).
+    Vérifie les identifiants et génère deux tokens JWT :
+      - Un access token à durée courte pour authentifier les requêtes.
+      - Un refresh token à durée plus longue pour renouveler l'access token.
+    Les scopes sont définis en fonction du rôle de l'utilisateur :
+      - Admin : ["admin", "read:profile", "write:profile"]
+      - Utilisateur classique : ["read:profile"]
+    Le refresh token est stocké en base pour permettre sa rotation sécurisée.
     """
     db_user = authenticate_user(db, user.username, user.password)
     if not db_user:
@@ -63,8 +68,39 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials"
         )
-    logger.info(f"User logged in successfully: username='{db_user.username}', id={db_user.id}")
-    return {"message": f"Welcome {db_user.username}!", "role": db_user.role}
+    
+    # Définir les scopes en fonction du rôle de l'utilisateur
+    if db_user.role == "admin":
+        scopes = ["admin", "read:profile", "write:profile"]
+    else:
+        scopes = ["read:profile"]
+
+    # Génération du token d'accès (durée courte)
+    access_token_expires = timedelta(minutes=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30)))
+    access_token = create_access_token(
+        data={"sub": db_user.username, "role": db_user.role, "scopes": scopes},
+        expires_delta=access_token_expires
+    )
+
+    # Génération du refresh token (durée plus longue), avec la claim "type": "refresh"
+    refresh_token_expires = timedelta(days=int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", 7)))
+    refresh_token = create_access_token(
+        data={"sub": db_user.username, "role": db_user.role, "scopes": scopes, "type": "refresh"},
+        expires_delta=refresh_token_expires
+    )
+
+    # Stocker le refresh token dans la base de données pour l'utilisateur
+    db_user.refresh_token = refresh_token
+    db.commit()
+
+    logger.info(f"User logged in successfully: username='{db_user.username}', id={db_user.id}. "
+                f"Access token and refresh token generated with scopes: {scopes}")
+    
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer"
+    }
 
 @router.post("/logout", tags=["Users"])
 def logout():

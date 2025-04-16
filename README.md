@@ -130,3 +130,7 @@ FastAPI_Xtrem/
     └── diagramme_db.png
 ```
 
+## Secret Création Compte Admin
+
+Dans le fichier `.env` créer une ligne `ADMIN_CREATION_SECRET=` et ajouter son secret qui permettra de créer un compte admin.
+

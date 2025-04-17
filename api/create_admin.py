@@ -2,6 +2,7 @@ import os
 from getpass import getpass
 from api.db.session import SessionLocal
 from api.db.services import create_user
+from api.core.crypto import generate_user_key
 from loguru import logger
 from dotenv import load_dotenv
 
@@ -38,8 +39,11 @@ def main():
 
     # Création du compte dans la base de données
     db = SessionLocal()
+    # Générer la clé pour l’admin
+    encryption_key = generate_user_key()
+
     try:
-        admin_user = create_user(db, username, email, password, role="admin")
+        admin_user = create_user(db, username, email, password, role="admin", encryption_key=encryption_key)
         logger.info(f"Compte administrateur créé avec succès : username='{admin_user.username}', id={admin_user.id}")
         print(f"Compte administrateur créé avec succès : {admin_user.username}")
     except Exception as e:

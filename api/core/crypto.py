@@ -18,14 +18,18 @@ def encrypt_sensitive_data(data: str, key: Optional[str]) -> str:
     if not key:
         # Pas de clé d'encryption -> on renvoie la donnée brute
         return data
-    fernet = Fernet(key.encode())
+    fernet = get_fernet(key)
     encrypted = fernet.encrypt(data.encode())
     return encrypted.decode()
 
-def decrypt_sensitive_data(encrypted_data: str, key: str) -> str:
+def decrypt_sensitive_data(encrypted_data: str, key: Optional[str]) -> str:
     """
     Déchiffre les données sensibles à l'aide de la clé de l'utilisateur.
+    Si aucune clé n'est fournie, renvoie la donnée telle quelle.
     """
+    if not key:
+        # Pas de clé -> on renvoie l'entrée brute
+        return encrypted_data
     fernet = get_fernet(key)
     decrypted = fernet.decrypt(encrypted_data.encode())
     return decrypted.decode()

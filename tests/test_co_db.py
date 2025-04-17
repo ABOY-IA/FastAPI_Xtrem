@@ -7,3 +7,4 @@ async def test_database_connection():
         await connect_to_db()
     except Exception as e:
         pytest.fail(f"DB connection failed with error: {e}")
+

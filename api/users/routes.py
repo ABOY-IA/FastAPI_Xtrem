@@ -86,6 +86,22 @@ def logout():
     logger.info("User logout requested")
     return {"message": "Logout successful (client should remove tokens)."}
 
+@router.delete("/{username}", tags=["Users"])
+def delete_user(username: str, db: Session = Depends(get_db)):
+    logger.info(f"Tentative de suppression de l'utilisateur : {username}")
+
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        logger.warning(f"Utilisateur '{username}' non trouvé.")
+        raise HTTPException(status_code=404, detail="User not found")
+
+    logger.info(f"Utilisateur trouvé : {user.username} (ID: {user.id}). Suppression en cours.")
+    db.delete(user)
+    db.commit()
+    logger.info(f"Utilisateur '{username}' supprimé avec succès.")
+
+    return {"message": f"User '{username}' deleted successfully."}
+
 @router.patch("/profile", response_model=UserOut, tags=["Users"])
 def update_profile(
     update_data: dict,

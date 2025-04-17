@@ -9,6 +9,8 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
+    networks:
+      - xtrem_net
 
   streamlit:
     build:
@@ -20,6 +22,8 @@ services:
       - .:/app
     depends_on:
       - api
+    networks:
+      - xtrem_net
 
   db:
     image: postgres:15
@@ -32,6 +36,29 @@ services:
       POSTGRES_DB: xtremdb
     ports:
       - "5433:5432"
+    networks:
+      - xtrem_net
+
+  tests:
+    build:
+      context: .
+      dockerfile: tests/Dockerfile.tests
+    depends_on:
+      - db
+      - api
+    environment:
+      DATABASE_URL: postgresql://user:pass@db:5432/xtremdb
+      PYTHONPATH: /app
+    volumes:
+      - .:/app
+    command: >
+      sh -c "sleep 5 && pytest tests"
+    networks:
+      - xtrem_net
 
 volumes:
   postgres_data:
+
+networks:
+  xtrem_net:
+    driver: bridge

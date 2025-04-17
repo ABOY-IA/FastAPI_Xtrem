@@ -18,15 +18,6 @@ def get_user_by_username(db: Session, username: str) -> Optional[User]:
 def get_user_by_email(db: Session, email: str) -> Optional[User]:
     return db.query(User).filter(User.email == email).first()
 
-def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
-    """
-    Vérifie qu'un utilisateur existe et que son mot de passe est correct.
-    """
-    user = get_user_by_username(db, username)
-    if not user or not verify_password(password, user.hashed_password):
-        return None
-    return user
-
 def create_user(
     db: Session,
     username: str,
@@ -35,24 +26,16 @@ def create_user(
     role: str = "user",
     encryption_key: Optional[str] = None,
 ) -> User:
-    """
-    Crée un nouvel utilisateur si le username/email n'existent pas,
-    hash le mot de passe, génère (ou utilise) la clé d'encryption,
-    et retourne l'instance persistée.
-    """
     # 1) Unicité
     if get_user_by_username(db, username):
         raise ValueError(f"Le nom d'utilisateur '{username}' existe déjà.")
     if get_user_by_email(db, email):
         raise ValueError(f"L'email '{email}' existe déjà.")
-
     # 2) Hash du mot de passe
     hashed_password = get_password_hash(password)
-
     # 3) Clé d'encryption
     key = encryption_key or generate_user_key()
-
-    # 4) Construction et persistance
+    # 4) Création de l'utilisateur
     user = User(
         username=username,
         email=email,
@@ -63,4 +46,10 @@ def create_user(
     db.add(user)
     db.commit()
     db.refresh(user)
+    return user
+
+def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
+    user = get_user_by_username(db, username)
+    if not user or not verify_password(password, user.hashed_password):
+        return None
     return user

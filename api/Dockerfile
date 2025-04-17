@@ -8,7 +8,7 @@ COPY requirements.txt .
 
 # Installer les dépendances sans version fixe (elles seront compatibles avec Python 3.12)
 RUN pip install --upgrade pip
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install -r requirements.txt
 
 # Copier le code source de l’API
 COPY . /app/api

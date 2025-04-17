@@ -8,7 +8,8 @@ COPY requirements.txt .
 
 # Installer les dépendances (ici pour Streamlit et toute autre librairie Frontend)
 RUN pip install --upgrade pip
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install -r requirements.txt
+RUN pip install --upgrade streamlit
 
 # Copier l’ensemble des fichiers du frontend
 COPY . .

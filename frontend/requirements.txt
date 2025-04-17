@@ -1,0 +1,6 @@
+streamlit
+altair
+pandas
+pydeck
+requests
+httpx

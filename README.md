@@ -69,16 +69,17 @@ FastAPI_Xtrem/
 │   ├── config.py                # Chargement des settings/env
 │   ├── deps/                    # Fonctions Depends (auth, DB, scopes...)
 │   │   └── auth.py
-│   ├── core/                    # Logique centrale : tokens, sécurité, utils
+│   ├── core/                    # Logique centrale : tokens, sécurité, chiffrement, utils
 │   │   ├── security.py
 │   │   ├── tokens.py
+│   │   ├── crypto.py
 │   │   └── utils.py
 │   ├── db/                      # Base de données
 │   │   ├── base.py              # Base SQLAlchemy
 │   │   ├── models.py            # Modèles ORM
 │   │   ├── schemas.py           # Modèles Pydantic
 │   │   ├── session.py           # Connexion DB + événements
-│   │   └── services.py              # Fonctions CRUD
+│   │   └── services.py          # Fonctions CRUD
 │   ├── users/                   # Routes utilisateurs
 │   │   └── routes.py
 │   ├── auth/                    # Routes authentification
@@ -89,10 +90,15 @@ FastAPI_Xtrem/
 │   │   └── routes.py
 │   ├── middleware/              # Rate limiting, CORS, XSS, etc.
 │   │   └── security_middleware.py
+│   ├── Dockerfile               # Dockerfile API
+│   ├── requirements.txt         # Librairies pour faire fonctionner l'API
+│   ├── __init__.py              # Identifie ce dossier comme package python
 │   └── routers.py               # Import central de tous les routers
 
 ├── frontend/                    # Interface utilisateur Streamlit
 │   ├── app.py                   # Lancement Streamlit
+│   ├── Dockerfile               # Dockerfile Streamlit
+│   ├── requirements.txt         # Librairies pour faire fonctionner Streamlit
 │   └── pages/
 │       ├── 0_login.py
 │       ├── 1_profil.py
@@ -114,7 +120,6 @@ FastAPI_Xtrem/
 ├── requirements.txt             # Dépendances Python
 ├── README.md                    # Documentation complète
 ├── create_admin.py              # Fichier de création compte administrateur
-├── Dockerfile                   # Image FastAPI
 ├── docker-compose.yml           # Services API, frontend, Prometheus, Grafana
 ├── docker-compose.override.yml  # Pour le dev local (montage auto)
 ├── .gitignore

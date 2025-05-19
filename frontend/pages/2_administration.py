@@ -67,8 +67,3 @@ for u in users:
         if c2.button("Annuler", key=f"no_{u['id']}"):
             st.session_state.pop("to_delete", None)
             st.info("Suppression annulée.")
-
-# ——— (facultatif) on peut aussi afficher un tableau récapitulatif ———
-# import pandas as pd
-# df = pd.DataFrame(users)
-# st.dataframe(df)

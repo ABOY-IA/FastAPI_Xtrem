@@ -21,28 +21,34 @@ if not TEST_DB_URL.startswith("postgresql://"):
 TEST_ASYNC_URL = TEST_DB_URL.replace("postgresql://", "postgresql+asyncpg://")
 
 # 2) Engine + Session async pour pytest
-engine = create_async_engine(TEST_ASYNC_URL, echo=True, pool_pre_ping=True)
+engine = create_async_engine(TEST_ASYNC_URL, echo=False, pool_pre_ping=True)
 TestingSessionLocal = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 db_sess.SessionLocal = TestingSessionLocal
 
-# 3) Création / destruction du schéma
-@pytest.fixture(scope="session", autouse=True)
-async def setup_test_db():
-    await db_base.init_db()
-    yield
-    # drop all tables
-    async with engine.begin() as conn:
-        await conn.run_sync(db_base.Base.metadata.drop_all)
-
-# 4) Boucle d’événements
 @pytest.fixture(scope="session")
 def event_loop():
-    loop = asyncio.get_event_loop_policy().new_event_loop()
+    """Créer une boucle d'événement dédiée pour pytest-asyncio."""
+    loop = asyncio.new_event_loop()
     yield loop
     loop.close()
 
-# 5) Client FastAPI (sync) devant un app async
-@pytest.fixture(scope="session")
-def client():
+@pytest.fixture(scope="session", autouse=True)
+async def setup_test_db(event_loop):
+    """Initialise la base pour les tests puis la détruit à la fin."""
+    async with engine.begin() as conn:
+        await conn.run_sync(db_base.Base.metadata.create_all)
+    yield
+    async with engine.begin() as conn:
+        await conn.run_sync(db_base.Base.metadata.drop_all)
+
+@pytest.fixture(scope="function")
+async def db_session():
+    """Session DB asynchrone pour chaque test."""
+    async with TestingSessionLocal() as session:
+        yield session
+
+@pytest.fixture(scope="function")
+def client(setup_test_db):
+    """Client de test FastAPI (sync, mais supporte l'app async)."""
     with TestClient(app) as c:
         yield c

@@ -1,0 +1,16 @@
+pytest
+pytest-asyncio
+pytest-order
+httpx
+fastapi
+sqlalchemy
+loguru
+python-dotenv
+asyncpg
+uvicorn
+email-validator
+pydantic
+passlib[bcrypt]
+python-jose[cryptography]
+cryptography
+psycopg2-binary

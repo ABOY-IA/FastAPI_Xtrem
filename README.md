@@ -60,6 +60,45 @@ pip install -r requirements.txt
 pip freeze > requirements.txt
 ```
 
+## 📦 Création de l’environnement Docker
+
+A la racine du projet, créer un ficher `.env` qui contiendra les variables d'environnement nécessaire aux Dockerfiles et docker-compose
+
+## Secret Création Compte Admin
+
+Dans le fichier `.env` créer une ligne `ADMIN_CREATION_SECRET=` et ajouter son secret qui permettra de créer un compte admin.
+
+## Commandes Docker
+
+### Création des images, volumes et containers
+
+```bash
+export COMPOSE_BAKE=true
+docker compose up
+```
+
+### Suppression
+
+Pour supprimer toutes les images et les containers mais garder les données de la DB :
+```bash
+docker compose down --rmi all
+```
+Pour supprimer toutes les images, les containers et les volumes de la DB :
+```bash
+docker compose down -v --rmi all
+```
+
+### Lancement des fichiers via Docker
+
+Pour executer les tests unitaires :
+```bash
+docker-compose run --rm tests
+```
+Pour créer un compte admin :
+```bash
+docker compose run --rm api python create_admin.py
+```
+
 ## 📁 Arborescence du projet FastAPI Xtrem
 
 ```bash
@@ -113,6 +152,8 @@ FastAPI_Xtrem/
 │   ├── test_auth.py             # Tests d'auth
 │   ├── test_admin.py            # Tests droits d’accès
 │   ├── test_monitoring.py       # Test /health
+│   ├── Dockerfile               # Dockerfile pytest
+│   ├── requirements.txt         # Librairies pour faire fonctionner les tests unitaires
 │   └── cassettes/               # (si VCR.py utilisé)
 
 ├── .env                         # Variables d’environnement (local)
@@ -122,6 +163,7 @@ FastAPI_Xtrem/
 ├── create_admin.py              # Fichier de création compte administrateur
 ├── docker-compose.yml           # Services API, frontend, Prometheus, Grafana
 ├── docker-compose.override.yml  # Pour le dev local (montage auto)
+├── pytest.ini
 ├── .gitignore
 ├── Makefile                     # Automatiser les commandes courantes (run, test, lint, ...)
 
@@ -135,7 +177,7 @@ FastAPI_Xtrem/
     └── diagramme_db.png
 ```
 
-## Secret Création Compte Admin
-
-Dans le fichier `.env` créer une ligne `ADMIN_CREATION_SECRET=` et ajouter son secret qui permettra de créer un compte admin.
+docker compose down --rmi all && \
+export COMPOSE_BAKE=true && \
+docker compose up
 

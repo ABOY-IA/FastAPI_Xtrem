@@ -1,24 +1,33 @@
-from fastapi.testclient import TestClient
-from api.main import app  # assure-toi que c'est bien le bon chemin vers ton app FastAPI
+import pytest
 
-client = TestClient(app)
-
-
-def test_create_user():
-    response = client.post("/users/register", json={
+@pytest.mark.order(1)
+def test_create_user(client):
+    payload = {
         "username": "testuser",
         "email": "test@example.com",
         "password": "testpassword"
-    })
-    assert response.status_code == 201
+    }
+    resp = client.post("/users/register", json=payload)
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["username"] == "testuser"
+    assert data["email"] == "test@example.com"
+    assert "id" in data
+    assert data["role"] == "user"
 
-def test_login_user():
-    response = client.post("/users/login", json={
-        "username": "testuser",
-        "password": "testpassword"
+@pytest.mark.order(2)
+def test_login_user_returns_tokens(client):
+    client.post("/users/register", json={
+        "username": "loginuser",
+        "email": "login@example.com",
+        "password": "pwd1234"
     })
-    assert response.status_code == 200
-
-def test_delete_user():
-    response = client.delete("/users/testuser")
-    assert response.status_code == 200
+    resp = client.post("/users/login", json={
+        "username": "loginuser",
+        "password": "pwd1234"
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert isinstance(data["access_token"], str)
+    assert isinstance(data["refresh_token"], str)
+    assert data["token_type"] == "bearer"

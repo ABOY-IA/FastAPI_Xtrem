@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends, status, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import or_
-from typing import List
+from sqlalchemy.future import select
+from typing import List, AsyncGenerator
 
 from api.db.session import SessionLocal
 from api.db.schemas import UserCreate, UserOut, UserLogin
@@ -16,7 +17,7 @@ from datetime import timedelta
 
 router = APIRouter()
 
-async def get_db() -> AsyncSession:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with SessionLocal() as session:
         yield session
 
@@ -49,6 +50,7 @@ async def register_user(
     sd = UserSensitiveData(user_id=new_user.id, encrypted_bio=encrypted_bio)
     db.add(sd)
     await db.commit()
+    await db.refresh(new_user)
     return UserOut(
         id=new_user.id,
         username=new_user.username,
@@ -78,17 +80,25 @@ async def login(
               "scopes": scopes, "type":"refresh"},
         expires_delta=refresh_delta
     )
-    # chiffrer & stocker
     encrypted_rt = encrypt_sensitive_data(refresh_token, db_user.encryption_key)
+
     if db_user.sensitive_data:
         db_user.sensitive_data.encrypted_refresh_token = encrypted_rt
     else:
-        db_user.sensitive_data = UserSensitiveData(
+        sd = UserSensitiveData(
             user_id=db_user.id,
             encrypted_bio="",
             encrypted_refresh_token=encrypted_rt
         )
+        db.add(sd)
+
+    print("LOGIN: refresh_token =", repr(refresh_token))
+    print("LOGIN: encrypted_rt =", repr(encrypted_rt))
+    print("LOGIN: db_user.encryption_key =", repr(db_user.encryption_key))
+
     await db.commit()
+    await db.refresh(db_user)
+
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,

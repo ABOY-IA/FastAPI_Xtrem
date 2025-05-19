@@ -4,16 +4,20 @@ WORKDIR /app
 
 # Installer les dépendances de tests
 COPY tests/requirements.txt .
+RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install -U pytest-asyncio
+RUN pip install requests  # Pour le script Python d'attente
 
 # Copier le code source de l’API et les tests
 COPY api /app/api
 COPY tests /app/tests
 
+# Copier le script d'attente Python
+COPY wait_for_api.py /app/wait_for_api.py
+
 # S’assurer que /app est dans PYTHONPATH pour l'import des modules
 ENV PYTHONPATH=/app
 
-# Lancer pytest depuis /app
 WORKDIR /app
-ENTRYPOINT ["pytest", "-v", "--maxfail=1", "--disable-warnings", "tests"]
-CMD []
+# Pas d'ENTRYPOINT ici : il sera défini dans docker-compose.yml

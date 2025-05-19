@@ -1,5 +1,8 @@
 FROM python:3.12-slim
 
+# Ajoute curl pour le healthcheck Docker
+RUN apt-get update && apt-get install -y curl
+
 WORKDIR /app
 
 # Copier le fichier requirements.txt pour profiter du cache Docker

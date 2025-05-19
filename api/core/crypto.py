@@ -1,4 +1,4 @@
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from typing import Optional
 
 def generate_user_key() -> str:
@@ -26,10 +26,17 @@ def decrypt_sensitive_data(encrypted_data: str, key: Optional[str]) -> str:
     """
     Déchiffre les données sensibles à l'aide de la clé de l'utilisateur.
     Si aucune clé n'est fournie, renvoie la donnée telle quelle.
+    Si la donnée est vide ou invalide, retourne une chaîne vide.
     """
     if not key:
         # Pas de clé -> on renvoie l'entrée brute
         return encrypted_data
+    if not encrypted_data:
+        return ""
     fernet = get_fernet(key)
-    decrypted = fernet.decrypt(encrypted_data.encode())
-    return decrypted.decode()
+    try:
+        decrypted = fernet.decrypt(encrypted_data.encode())
+        return decrypted.decode()
+    except InvalidToken:
+        # Cas où la donnée n'est pas chiffrée ou la clé ne correspond pas
+        return ""

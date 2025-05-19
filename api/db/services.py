@@ -1,7 +1,9 @@
-from sqlalchemy.orm import Session
-from .models import User
-from passlib.context import CryptContext
 from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from api.db.models import User
+
+from passlib.context import CryptContext
 from api.core.crypto import generate_user_key
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -12,30 +14,31 @@ def get_password_hash(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
-def get_user_by_username(db: Session, username: str) -> Optional[User]:
-    return db.query(User).filter(User.username == username).first()
+async def get_user_by_username(db: AsyncSession, username: str) -> Optional[User]:
+    result = await db.execute(select(User).where(User.username == username))
+    return result.scalars().first()
 
-def get_user_by_email(db: Session, email: str) -> Optional[User]:
-    return db.query(User).filter(User.email == email).first()
+async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
+    result = await db.execute(select(User).where(User.email == email))
+    return result.scalars().first()
 
-def create_user(
-    db: Session,
+async def create_user(
+    db: AsyncSession,
     username: str,
     email: str,
     password: str,
     role: str = "user",
     encryption_key: Optional[str] = None,
 ) -> User:
-    # 1) Unicité
-    if get_user_by_username(db, username):
+    # unicité
+    if await get_user_by_username(db, username):
         raise ValueError(f"Le nom d'utilisateur '{username}' existe déjà.")
-    if get_user_by_email(db, email):
+    if await get_user_by_email(db, email):
         raise ValueError(f"L'email '{email}' existe déjà.")
-    # 2) Hash du mot de passe
+    # hash et clé
     hashed_password = get_password_hash(password)
-    # 3) Clé d'encryption
     key = encryption_key or generate_user_key()
-    # 4) Création de l'utilisateur
+    # création
     user = User(
         username=username,
         email=email,
@@ -44,12 +47,14 @@ def create_user(
         encryption_key=key,
     )
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
     return user
 
-def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
-    user = get_user_by_username(db, username)
+async def authenticate_user(
+    db: AsyncSession, username: str, password: str
+) -> Optional[User]:
+    user = await get_user_by_username(db, username)
     if not user or not verify_password(password, user.hashed_password):
         return None
     return user

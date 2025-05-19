@@ -44,5 +44,14 @@ services:
       timeout: 3s
       retries: 5
 
+  tests:
+    build:
+      context: .
+      dockerfile: tests/Dockerfile
+    environment:
+      TEST_DATABASE_URL: postgresql://user:pass@db:5432/xtremdb
+    depends_on:
+      - db
+
 volumes:
   postgres_data:

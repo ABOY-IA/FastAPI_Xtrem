@@ -1,37 +1,29 @@
 from fastapi import FastAPI
 import uvicorn
-from api.events import register_startup_events, connect_to_db, disconnect_from_db
+from api.events import register_startup_events
 from api.users.routes import router as users_router
 from api.admin.routes import router as admin_router
 from api.auth.routes import router as auth_router
 
-# Création de l'application FastAPI avec ses métadonnées
 app = FastAPI(
-    title="FastAPI Xtrem",
-    description="API complète pour la gestion des utilisateurs et sécurité.",
-    version="0.1.0"
+    title="FastAPI Xtrem (100% async)",
+    description="API utilisateurs/sécurité, toute en async.",
+    version="0.2.0-async"
 )
 
-# Enregistrement des événements de démarrage pour initialiser la base (création des tables)
 register_startup_events(app)
 
-# Ajout des gestionnaires d'événements pour la connexion et la déconnexion (logs)
-app.add_event_handler("startup", connect_to_db)
-app.add_event_handler("shutdown", disconnect_from_db)
-app.include_router(auth_router, prefix="/auth", tags=["Auth"])
-
-# Endpoint racine pour vérifier le bon fonctionnement de l'API
 @app.get("/", tags=["Root"])
-def read_root() -> dict:
-    """
-    Endpoint de test pour vérifier que l'API fonctionne.
-    Renvoie un dictionnaire JSON avec le message "Hello World".
-    """
+async def read_root() -> dict:
     return {"message": "Hello World"}
 
-# Inclusion du routeur pour les endpoints utilisateurs
+@app.get("/health", tags=["Monitoring"])
+async def health() -> dict:
+    return {"status": "ok"}
+
 app.include_router(users_router, prefix="/users", tags=["Users"])
 app.include_router(admin_router, prefix="/admin", tags=["Admin"])
+app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("api.main:app", host="0.0.0.0", port=8000, reload=True)

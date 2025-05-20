@@ -1,13 +1,14 @@
 import pytest
 
 @pytest.mark.order(1)
-def test_create_user(client):
+@pytest.mark.asyncio
+async def test_create_user(async_client):
     payload = {
         "username": "testuser",
         "email": "test@example.com",
         "password": "testpassword"
     }
-    resp = client.post("/users/register", json=payload)
+    resp = await async_client.post("/users/register", json=payload)
     assert resp.status_code == 201
     data = resp.json()
     assert data["username"] == "testuser"
@@ -16,13 +17,14 @@ def test_create_user(client):
     assert data["role"] == "user"
 
 @pytest.mark.order(2)
-def test_login_user_returns_tokens(client):
-    client.post("/users/register", json={
+@pytest.mark.asyncio
+async def test_login_user_returns_tokens(async_client):
+    await async_client.post("/users/register", json={
         "username": "loginuser",
         "email": "login@example.com",
         "password": "pwd1234"
     })
-    resp = client.post("/users/login", json={
+    resp = await async_client.post("/users/login", json={
         "username": "loginuser",
         "password": "pwd1234"
     })

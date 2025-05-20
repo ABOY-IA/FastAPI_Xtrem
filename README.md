@@ -177,7 +177,7 @@ FastAPI_Xtrem/
     └── diagramme_db.png
 ```
 
-docker compose down --rmi all && \
+docker-compose down --rmi all --volumes --remove-orphans && \
 export COMPOSE_BAKE=true && \
-docker compose up
+docker-compose up --build
 

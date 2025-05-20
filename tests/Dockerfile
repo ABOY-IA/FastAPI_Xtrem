@@ -2,18 +2,22 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# 1) Installer les dépendances de tests
+# Installer les dépendances de tests
 COPY tests/requirements.txt .
+RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install -U pytest-asyncio
+RUN pip install requests
 
-# 2) Copier le code de l’API et les tests
+# Copier le code source de l’API et les tests
 COPY api /app/api
 COPY tests /app/tests
 
-# 3) S’assurer que /app est dans PYTHONPATH
+# Copier le script d'attente Python
+COPY wait_for_api.py /app/wait_for_api.py
+
+# S’assurer que /app est dans PYTHONPATH pour l'import des modules
 ENV PYTHONPATH=/app
 
-# 4) Lancer pytest depuis /app
 WORKDIR /app
-ENTRYPOINT ["pytest", "-v", "--maxfail=1", "--disable-warnings", "tests"]
-CMD []
+# Pas d'ENTRYPOINT ici : il sera défini dans docker-compose.yml

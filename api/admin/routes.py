@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from typing import List
+from typing import List, AsyncGenerator
+from fastapi import Request
 
 from api.db.session import SessionLocal
 from api.db.models import User
@@ -9,9 +10,17 @@ from api.db.schemas import UserOut
 
 router = APIRouter()
 
-async def get_db() -> AsyncSession:
+async def get_db(request: Request) -> AsyncGenerator[AsyncSession, None]:
     async with SessionLocal() as session:
-        yield session
+        request.state.db = session
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
 
 async def get_admin_user(
     x_user: str = Header(...),
@@ -33,7 +42,7 @@ async def list_all_users(
 ):
     result = await db.execute(select(User))
     users = result.scalars().all()
-    return [UserOut.from_orm(u) for u in users]
+    return [UserOut.model_validate(u) for u in users]
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(

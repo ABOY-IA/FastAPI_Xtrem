@@ -4,6 +4,7 @@ from api.events import register_startup_events
 from api.users.routes import router as users_router
 from api.admin.routes import router as admin_router
 from api.auth.routes import router as auth_router
+import os
 
 app = FastAPI(
     title="FastAPI Xtrem (100% async)",

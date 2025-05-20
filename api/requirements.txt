@@ -16,4 +16,4 @@ httpx
 python-dateutil
 pydantic[email]
 psycopg2-binary
-
+bcrypt

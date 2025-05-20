@@ -28,13 +28,8 @@ engine = create_async_engine(ASYNC_URL, echo=False, pool_pre_ping=True)
 TestingSessionLocal = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 db_sess.SessionLocal = TestingSessionLocal
 
-@pytest_asyncio.fixture(scope="session", autouse=True)
+@pytest_asyncio.fixture(scope="function", autouse=True)
 async def setup_database():
-    """
-    Crée toutes les tables de la base UNE FOIS au début de la session de tests,
-    et détruit toutes les tables à la fin de la session.
-    Cela évite les conflits de transaction entre les requêtes HTTP des tests.
-    """
     await db_base.init_db()
     yield
     # Nettoyage à la toute fin de la session de tests :

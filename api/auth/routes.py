@@ -1,7 +1,7 @@
 import os
 import sys
 from datetime import timedelta
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Request
 from fastapi.security import OAuth2PasswordBearer, HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,15 +23,24 @@ ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+async def get_db(request: Request) -> AsyncGenerator[AsyncSession, None]:
     async with SessionLocal() as session:
-        yield session
+        request.state.db = session
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
 
 @router.post("/refresh", tags=["Auth"])
 async def refresh_and_rotate_token(
     credentials: HTTPAuthorizationCredentials = Depends(refresh_token_scheme),
     db: AsyncSession = Depends(get_db)
 ):
+    print("DEBUG: /auth/refresh route called", file=sys.stderr, flush=True)
     token = credentials.credentials
     # 1. Décodage et vérification du JWT refresh token
     try:
@@ -49,16 +58,22 @@ async def refresh_and_rotate_token(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token payload"
             )
-    except JWTError:
+    except JWTError as e:
+        print("DEBUG: JWTError during refresh decode:", str(e), file=sys.stderr, flush=True)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token"
         )
 
-    # 2. Récupération directe du refresh token en base pour debug ultime
+    # DEBUG: Affiche tout le contenu de user_sensitive_data avant le JOIN
+    result_debug = await db.execute(select(UserSensitiveData))
+    all_sensitive_data = result_debug.scalars().all()
+    print("DEBUG: ALL user_sensitive_data =", all_sensitive_data, file=sys.stderr, flush=True)
+
+    # 2. Récupération de l'utilisateur et de sa sensitive_data via OUTERJOIN
     result = await db.execute(
         select(User, UserSensitiveData)
-        .join(UserSensitiveData, User.id == UserSensitiveData.user_id)
+        .outerjoin(UserSensitiveData, User.id == UserSensitiveData.user_id)
         .where(User.username == username)
     )
     row = result.first()
@@ -66,6 +81,7 @@ async def refresh_and_rotate_token(
         user, sensitive_data = row
     else:
         user, sensitive_data = None, None
+        print("DEBUG: JOIN row is None for username", username, file=sys.stderr, flush=True)
 
     print("DEBUG: user =", user, file=sys.stderr, flush=True)
     print("DEBUG: sensitive_data =", sensitive_data, file=sys.stderr, flush=True)
@@ -73,7 +89,7 @@ async def refresh_and_rotate_token(
         print("DEBUG: sensitive_data.encrypted_refresh_token =", sensitive_data.encrypted_refresh_token, file=sys.stderr, flush=True)
 
     if not user or not sensitive_data or not sensitive_data.encrypted_refresh_token:
-        # Ajoute ici un SELECT brut pour voir ce qu'il y a en base
+        # SELECT brut pour voir ce qu'il y a pour cet utilisateur
         result2 = await db.execute(
             select(UserSensitiveData).where(UserSensitiveData.user_id == user.id if user else -1)
         )
@@ -84,32 +100,19 @@ async def refresh_and_rotate_token(
             detail="Invalid refresh token"
         )
 
-    # 3. Logs détaillés pour le debug
-    print("DEBUG: user =", user, file=sys.stderr, flush=True)
-    print("DEBUG: sensitive_data =", sensitive_data, file=sys.stderr, flush=True)
-    if sensitive_data:
-        print("DEBUG: sensitive_data.encrypted_refresh_token =", sensitive_data.encrypted_refresh_token, file=sys.stderr, flush=True)
-
-    # 4. Vérification stricte de la présence du refresh token stocké
-    if not user or not sensitive_data or not sensitive_data.encrypted_refresh_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token"
-        )
-
-    # 5. Déchiffrement du refresh token stocké
+    # 3. Déchiffrement du refresh token stocké
     stored = decrypt_sensitive_data(sensitive_data.encrypted_refresh_token, user.encryption_key)
     print("REFRESH: token reçu =", repr(token), file=sys.stderr, flush=True)
     print("REFRESH: token stocké déchiffré =", repr(stored), file=sys.stderr, flush=True)
 
-    # 6. Comparaison stricte (strip pour éviter les espaces parasites)
+    # 4. Comparaison stricte (strip pour éviter les espaces parasites)
     if not stored or stored.strip() != token.strip():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token"
         )
 
-    # 7. Génération et stockage des nouveaux tokens
+    # 5. Génération et stockage des nouveaux tokens
     new_access = create_access_token(
         data={"sub": username, "role": role, "scopes": scopes},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)

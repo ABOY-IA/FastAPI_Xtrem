@@ -7,7 +7,7 @@ COPY tests/requirements.txt .
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install -U pytest-asyncio
-RUN pip install requests  # Pour le script Python d'attente
+RUN pip install requests
 
 # Copier le code source de l’API et les tests
 COPY api /app/api

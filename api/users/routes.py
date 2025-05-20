@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, status, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import or_
 from sqlalchemy.future import select
-from typing import List, AsyncGenerator
+from typing import AsyncGenerator
 
 from api.db.session import SessionLocal
 from api.db.schemas import UserCreate, UserOut, UserLogin
@@ -14,12 +14,21 @@ from api.core.crypto import encrypt_sensitive_data, decrypt_sensitive_data
 from api.core.tokens import create_access_token
 import os
 from datetime import timedelta
+from fastapi import Request
 
 router = APIRouter()
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+async def get_db(request: Request) -> AsyncGenerator[AsyncSession, None]:
     async with SessionLocal() as session:
-        yield session
+        request.state.db = session
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
 
 async def get_current_user(
     db: AsyncSession = Depends(get_db),

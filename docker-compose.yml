@@ -55,8 +55,8 @@ services:
     build:
       context: .
       dockerfile: tests/Dockerfile
-    environment:
-      DATABASE_URL: postgresql://user:pass@db:5432/xtremdb
+    env_file:
+      - .env
     depends_on:
       db:
         condition: service_healthy

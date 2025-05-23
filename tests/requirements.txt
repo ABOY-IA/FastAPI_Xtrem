@@ -10,8 +10,8 @@ asyncpg
 uvicorn
 email-validator
 pydantic
-passlib[bcrypt]
 python-jose[cryptography]
 cryptography
 psycopg2-binary
 bcrypt
+requests

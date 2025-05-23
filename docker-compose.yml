@@ -37,12 +37,9 @@ services:
       - .env
 
   db:
-    image: postgres:15
+    build:
+      context: ./postgres-custom
     restart: always
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: pass
-      POSTGRES_DB: xtremdb
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     ports:
@@ -51,7 +48,10 @@ services:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d postgres"]
       interval: 5s
       timeout: 3s
-      retries: 5
+      retries: 20
+      start_period: 60s
+    env_file:
+      - .env
 
   tests:
     build:
@@ -66,7 +66,7 @@ services:
         condition: service_healthy
       api:
         condition: service_healthy
-    entrypoint: ["sh", "-c", "python /app/wait_for_api.py http://api:8000/health 60 && pytest -v --maxfail=1 --disable-warnings tests"]
+    entrypoint: ["sh", "-c", "python /app/wait_for_db.py && python /app/wait_for_api.py http://api:8000/health 60 && pytest -v --maxfail=1 --disable-warnings tests"]
 
 volumes:
   postgres_data:

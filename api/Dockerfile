@@ -14,6 +14,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copier le code source de l’API
 COPY . .
+# Copier le script d'attente pour la base de données
+COPY wait_for_db.py /app/wait_for_db.py
 
 # Définir la commande de démarrage de l’API
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

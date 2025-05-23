@@ -12,8 +12,10 @@ RUN pip show pytest-asyncio
 COPY api /app/api
 COPY tests /app/tests
 
-# Copier le script d'attente Python
-COPY wait_for_api.py /app/wait_for_api.py
+# Copier le script d'attente de l’API et de la base de données
+COPY tests/wait_for_api.py /app/wait_for_api.py
+COPY api/wait_for_db.py /app/wait_for_db.py
+
 
 # S’assurer que /app est dans PYTHONPATH pour l'import des modules
 ENV PYTHONPATH=/app

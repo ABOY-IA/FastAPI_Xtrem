@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, status, Header
+from fastapi import APIRouter, HTTPException, Depends, status, Header, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import or_
 from sqlalchemy.future import select
@@ -6,15 +6,13 @@ from typing import AsyncGenerator
 
 from api.db.session import SessionLocal
 from api.db.schemas import UserCreate, UserOut, UserLogin
-from api.db.services import (
-    create_user, authenticate_user, get_user_by_username
-)
+from api.db.services import create_user, authenticate_user, get_user_by_username
 from api.db.models import User, UserSensitiveData
 from api.core.crypto import encrypt_sensitive_data, decrypt_sensitive_data
 from api.core.tokens import create_access_token
+from api.logger import logger
 import os
 from datetime import timedelta
-from fastapi import Request
 
 router = APIRouter()
 
@@ -26,6 +24,7 @@ async def get_db(request: Request) -> AsyncGenerator[AsyncSession, None]:
             await session.commit()
         except Exception:
             await session.rollback()
+            logger.exception("Erreur lors de la gestion de la session DB")
             raise
         finally:
             await session.close()
@@ -36,6 +35,7 @@ async def get_current_user(
 ) -> User:
     user = await get_user_by_username(db, x_user)
     if not user:
+        logger.warning(f"Échec d'authentification de l'utilisateur via header : {x_user}")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="User not authenticated")
     return user
@@ -51,15 +51,16 @@ async def register_user(
         )
     )
     if exists.scalars().first():
+        logger.warning(f"Tentative de création d'utilisateur avec username/email déjà utilisé : {user.username}/{user.email}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail="Username or email already registered")
     new_user = await create_user(db, user.username, user.email, user.password)
-    # bio clair dans la sortie, chiffré en base
     encrypted_bio = encrypt_sensitive_data(user.bio or "", new_user.encryption_key)
     sd = UserSensitiveData(user_id=new_user.id, encrypted_bio=encrypted_bio)
     db.add(sd)
     await db.commit()
     await db.refresh(new_user)
+    logger.info(f"Nouvel utilisateur enregistré : {new_user.username} ({new_user.email})")
     return UserOut(
         id=new_user.id,
         username=new_user.username,
@@ -75,22 +76,22 @@ async def login(
 ):
     db_user = await authenticate_user(db, user.username, user.password)
     if not db_user:
+        logger.warning(f"Échec de login pour {user.username}")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="Invalid credentials")
-    scopes = ["admin","read:profile","write:profile"] if db_user.role=="admin" else ["read:profile"]
-    access_delta = timedelta(minutes=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES",30)))
+    scopes = ["admin", "read:profile", "write:profile"] if db_user.role == "admin" else ["read:profile"]
+    access_delta = timedelta(minutes=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30)))
     access_token = create_access_token(
         data={"sub": db_user.username, "role": db_user.role, "scopes": scopes},
         expires_delta=access_delta
     )
-    refresh_delta = timedelta(days=int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS",7)))
+    refresh_delta = timedelta(days=int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", 7)))
     refresh_token = create_access_token(
         data={"sub": db_user.username, "role": db_user.role,
-              "scopes": scopes, "type":"refresh"},
+              "scopes": scopes, "type": "refresh"},
         expires_delta=refresh_delta
     )
     encrypted_rt = encrypt_sensitive_data(refresh_token, db_user.encryption_key)
-
     if db_user.sensitive_data:
         db_user.sensitive_data.encrypted_refresh_token = encrypted_rt
     else:
@@ -100,14 +101,12 @@ async def login(
             encrypted_refresh_token=encrypted_rt
         )
         db.add(sd)
-
-    print("LOGIN: refresh_token =", repr(refresh_token))
-    print("LOGIN: encrypted_rt =", repr(encrypted_rt))
-    print("LOGIN: db_user.encryption_key =", repr(db_user.encryption_key))
-
+    logger.debug(f"LOGIN: refresh_token = {repr(refresh_token)}")
+    logger.debug(f"LOGIN: encrypted_rt = {repr(encrypted_rt)}")
+    logger.debug(f"LOGIN: db_user.encryption_key = {repr(db_user.encryption_key)}")
     await db.commit()
     await db.refresh(db_user)
-
+    logger.info(f"Utilisateur connecté : {db_user.username}")
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -118,6 +117,7 @@ async def login(
 
 @router.post("/logout")
 async def logout():
+    logger.info("Déconnexion utilisateur (endpoint appelé)")
     return {"message": "Logout successful"}
 
 @router.get("/profile", response_model=UserOut)
@@ -130,6 +130,7 @@ async def get_profile(
             current_user.sensitive_data.encrypted_bio,
             current_user.encryption_key
         )
+    logger.info(f"Consultation du profil utilisateur : {current_user.username}")
     return UserOut(
         id=current_user.id,
         username=current_user.username,

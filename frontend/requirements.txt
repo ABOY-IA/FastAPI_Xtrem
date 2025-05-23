@@ -4,3 +4,4 @@ pandas
 pydeck
 requests
 httpx
+loguru

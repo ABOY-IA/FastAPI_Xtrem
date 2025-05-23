@@ -1,5 +1,6 @@
 import pytest
 import asyncio
+from tests.logger import logger
 
 @pytest.mark.asyncio
 async def test_login_and_refresh_cycle(async_client):
@@ -11,6 +12,7 @@ async def test_login_and_refresh_cycle(async_client):
     }
     resp = await async_client.post("/users/register", json=payload)
     assert resp.status_code == 201, resp.text
+    logger.info("Utilisateur 'eve' créé pour le test de refresh token")
 
     # --- 2) Login ---
     resp = await async_client.post(
@@ -21,6 +23,7 @@ async def test_login_and_refresh_cycle(async_client):
     tok = resp.json()
     access1 = tok["access_token"]
     refresh1 = tok["refresh_token"]
+    logger.info("Utilisateur 'eve' connecté pour le test de refresh token")
 
     # --- 3a) Accès à une route protégée (ex: /users/profile) ---
     protected = await async_client.get(
@@ -28,10 +31,8 @@ async def test_login_and_refresh_cycle(async_client):
         headers={"X-User": "eve", "Authorization": f"Bearer {access1}"}
     )
     assert protected.status_code == 200
-
-    # --- 3b) Debug : forcer le chargement de la relation avant refresh ---
     profile_data = protected.json()
-    print("DEBUG: profile_data =", profile_data)
+    logger.debug(f"profile_data = {profile_data}")
 
     await asyncio.sleep(0.1)
 
@@ -44,6 +45,7 @@ async def test_login_and_refresh_cycle(async_client):
     tok2 = resp2.json()
     assert tok2["access_token"] != access1
     assert tok2["refresh_token"] != refresh1
+    logger.info("Rotation du refresh token réussie pour 'eve'")
 
     # --- 5) Ancien refresh invalide ---
     resp3 = await async_client.post(
@@ -51,3 +53,4 @@ async def test_login_and_refresh_cycle(async_client):
         headers={"Authorization": f"Bearer {refresh1}"}
     )
     assert resp3.status_code == 401
+    logger.info("Ancien refresh token invalidé comme attendu pour 'eve'")

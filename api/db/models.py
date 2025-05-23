@@ -25,5 +25,4 @@ class UserSensitiveData(Base):
     user_id = Column(Integer, ForeignKey("users.id"), unique=True)
     encrypted_bio = Column(String)
     encrypted_refresh_token = Column(String, nullable=True)
-
     user = relationship("User", back_populates="sensitive_data")

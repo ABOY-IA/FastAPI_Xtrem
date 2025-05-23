@@ -2,12 +2,11 @@ import os
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import OAuth2PasswordBearer, SecurityScopes
 from jose import jwt, JWTError
+from api.logger import logger
 
-# Lecture des paramètres depuis les variables d'environnement
 SECRET_KEY = os.getenv("SECRET_KEY", "mon_secret_default")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 
-# Définition du schéma OAuth2 avec scopes pour la sécurité
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="login",
     scopes={
@@ -26,6 +25,7 @@ def get_current_user_with_scopes(
     Renvoie un dictionnaire contenant le nom d'utilisateur et les scopes.
     """
     if not token:
+        logger.warning("Aucun token JWT fourni")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
@@ -36,6 +36,7 @@ def get_current_user_with_scopes(
         username: str = payload.get("sub")
         token_scopes = payload.get("scopes", [])
         if username is None:
+            logger.warning("Token JWT sans username")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token payload",
@@ -44,6 +45,7 @@ def get_current_user_with_scopes(
         # Vérification que tous les scopes requis sont présents
         for scope in security_scopes.scopes:
             if scope not in token_scopes:
+                logger.warning(f"Permission insuffisante : scope manquant {scope}")
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Insufficient permissions. Missing scope: {scope}",
@@ -51,6 +53,7 @@ def get_current_user_with_scopes(
                 )
         return {"username": username, "scopes": token_scopes}
     except JWTError:
+        logger.warning("Échec de validation du token JWT")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate token",

@@ -120,11 +120,6 @@ Les fichiers de configuration et certificats sont dans le dossier `postgres-cust
 docker-compose down --rmi all --volumes --remove-orphans
 ```
 
-### Arrêter tous les conteneurs en cours
-```
-docker-compose down
-```
-
 ### Build complet et lancement de la stack
 ```
 export COMPOSE_BAKE=true
@@ -232,7 +227,7 @@ docker-compose run --rm api python create_admin.py
 
 ## 📝 Conseils et bonnes pratiques
 
-- **Ne versionnez jamais votre fichier `.env` contenant des secrets en production** (utilisez `.env.example` pour partager la structure sans les secrets).
+- **Créer le `.env` avec les noms de variables indiqués dans l'exemple**
 - **Vérifiez la cohérence des variables d’environnement entre le `.env` et le `docker-compose.yml`.**
 - **Pour toute modification de la configuration PostgreSQL (SCRAM, SSL, etc.), nettoyez les volumes avant de rebuild.**
 - **Pour ajouter des dépendances Python, modifiez le `requirements.txt` du dossier concerné puis rebuildez l’image correspondante.**
